@@ -18,6 +18,21 @@ app.post('/create-video', async (req, res) => {
   }
 
   try {
+    // Supprimer les anciennes vidéos dans public/videos
+    const videosDir = path.join(__dirname, 'public/videos');
+    try {
+      const files = await fs.readdir(videosDir);
+      for (const file of files) {
+        if (file.endsWith('.mp4')) {
+          await fs.unlink(path.join(videosDir, file));
+        }
+      }
+      console.log('Anciennes vidéos supprimées');
+    } catch (err) {
+      // Si le dossier n’existe pas encore ou autre erreur, on ignore
+      console.warn('Aucune vidéo à supprimer ou erreur:', err.message);
+    }
+
     const tempDir = path.join(__dirname, 'temp', Date.now().toString());
     await fs.mkdir(tempDir, { recursive: true });
 
@@ -36,11 +51,11 @@ app.post('/create-video', async (req, res) => {
 
     await fs.mkdir(path.dirname(outputVideoPath), { recursive: true });
 
-    // Créer la vidéo avec ffmpeg et attendre la fin avec une promesse
+    // Créer la vidéo avec ffmpeg (1 image toutes les 5 secondes)
     await new Promise((resolve, reject) => {
       ffmpeg()
         .input(path.join(tempDir, 'img%03d.jpg'))
-        .inputOptions(['-framerate 1/3'])
+        .inputOptions(['-framerate 1/5'])
         .outputOptions(['-c:v libx264', '-r 30', '-pix_fmt yuv420p'])
         .output(outputVideoPath)
         .on('end', resolve)
