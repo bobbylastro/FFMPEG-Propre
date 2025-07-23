@@ -7,6 +7,9 @@ const ffmpeg = require('fluent-ffmpeg');
 const app = express();
 app.use(express.json());
 
+// Expose le dossier public pour que les fichiers soient accessibles via URL
+app.use('/videos', express.static(path.join(__dirname, 'public/videos')));
+
 app.post('/create-video', async (req, res) => {
   const { images } = req.body;
 
@@ -28,37 +31,35 @@ app.post('/create-video', async (req, res) => {
 
     await Promise.all(downloadPromises);
 
-    const outputVideoPath = path.join(tempDir, 'output.mp4');
+    const outputFileName = `video_${Date.now()}.mp4`;
+    const outputVideoPath = path.join(__dirname, 'public/videos', outputFileName);
 
-    ffmpeg()
-      .input(path.join(tempDir, 'img%03d.jpg'))
-      .inputOptions(['-framerate 1/3'])
-      .outputOptions(['-c:v libx264', '-r 30', '-pix_fmt yuv420p'])
-      .output(outputVideoPath)
-      .on('end', () => {
-        res.download(outputVideoPath, 'video.mp4', (err) => {
-          if (err) {
-            console.error('Erreur lors de l’envoi de la vidéo', err);
-          }
-        });
-        // Supprime le dossier seulement après que la réponse ait fini d’être envoyée
-        res.on('finish', async () => {
-          await fs.rm(tempDir, { recursive: true, force: true });
-        });
-      })
-      .on('error', async (err) => {
-        console.error('Erreur ffmpeg :', err);
-        await fs.rm(tempDir, { recursive: true, force: true });
-        res.status(500).json({ error: 'Erreur lors de la création de la vidéo' });
-      })
-      .run();
+    await fs.mkdir(path.dirname(outputVideoPath), { recursive: true });
+
+    // Créer la vidéo avec ffmpeg et attendre la fin avec une promesse
+    await new Promise((resolve, reject) => {
+      ffmpeg()
+        .input(path.join(tempDir, 'img%03d.jpg'))
+        .inputOptions(['-framerate 1/3'])
+        .outputOptions(['-c:v libx264', '-r 30', '-pix_fmt yuv420p'])
+        .output(outputVideoPath)
+        .on('end', resolve)
+        .on('error', reject)
+        .run();
+    });
+
+    // Nettoyer le temp
+    await fs.rm(tempDir, { recursive: true, force: true });
+
+    // Renvoie l'URL publique de la vidéo
+    const videoUrl = `${req.protocol}://${req.get('host')}/videos/${outputFileName}`;
+    res.json({ videoUrl });
 
   } catch (error) {
     console.error('Erreur serveur :', error);
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
-
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
