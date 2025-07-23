@@ -15,11 +15,9 @@ app.post('/create-video', async (req, res) => {
   }
 
   try {
-    // Création du dossier temporaire avec timestamp
     const tempDir = path.join(__dirname, 'temp', Date.now().toString());
     await fs.mkdir(tempDir, { recursive: true });
 
-    // Télécharger et sauvegarder les images en img001.jpg, img002.jpg...
     const downloadPromises = images.map(async (url, i) => {
       const response = await axios.get(url, { responseType: 'arraybuffer' });
       const fileName = `img${String(i + 1).padStart(3, '0')}.jpg`;
@@ -32,20 +30,20 @@ app.post('/create-video', async (req, res) => {
 
     const outputVideoPath = path.join(tempDir, 'output.mp4');
 
-    // Lancer ffmpeg pour créer la vidéo
     ffmpeg()
       .input(path.join(tempDir, 'img%03d.jpg'))
-      .inputOptions(['-framerate 1/3']) // chaque image dure 3 secondes
+      .inputOptions(['-framerate 1/3'])
       .outputOptions(['-c:v libx264', '-r 30', '-pix_fmt yuv420p'])
       .output(outputVideoPath)
-      .on('end', async () => {
-        // Une fois la vidéo créée, on l'envoie en réponse
-        res.download(outputVideoPath, 'video.mp4', async (err) => {
-          // Nettoyage du dossier temporaire après envoi
-          await fs.rm(tempDir, { recursive: true, force: true });
+      .on('end', () => {
+        res.download(outputVideoPath, 'video.mp4', (err) => {
           if (err) {
             console.error('Erreur lors de l’envoi de la vidéo', err);
           }
+        });
+        // Supprime le dossier seulement après que la réponse ait fini d’être envoyée
+        res.on('finish', async () => {
+          await fs.rm(tempDir, { recursive: true, force: true });
         });
       })
       .on('error', async (err) => {
@@ -60,6 +58,7 @@ app.post('/create-video', async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
   }
 });
+
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
