@@ -56,7 +56,7 @@ app.post('/create-video', async (req, res) => {
     await new Promise((resolve, reject) => {
       let command = ffmpeg()
         .input(path.join(tempDir, 'img%03d.jpg'))
-        .inputOptions(['-framerate 1/5']);
+        .inputOptions(['-framerate 1/8']);
 
       if (audioPath) {
         command = command.input(audioPath);
