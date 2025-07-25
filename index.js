@@ -13,51 +13,46 @@ app.use('/videos', express.static(path.join(__dirname, 'public/videos')));
 app.post('/create-video', async (req, res) => {
   const { images, audioUrl } = req.body;
 
-  if (!images || !Array.isArray(images) || images.length === 0) {
-    return res.status(400).json({ error: 'Aucune image fournie' });
+  if (!Array.isArray(images) || images.length === 0) {
+    return res.status(400).json({ error: 'Aucune image fournie.' });
   }
 
-  try {
-    const videosDir = path.join(__dirname, 'public/videos');
-    try {
-      const files = await fs.readdir(videosDir);
-      for (const file of files) {
-        if (file.endsWith('.mp4')) {
-          await fs.unlink(path.join(videosDir, file));
-        }
-      }
-      console.log('Anciennes vidéos supprimées');
-    } catch (err) {
-      console.warn('Aucune vidéo à supprimer ou erreur:', err.message);
-    }
+  const videosDir = path.join(__dirname, 'public/videos');
+  const tempDir = path.join(__dirname, 'temp', Date.now().toString());
 
-    const tempDir = path.join(__dirname, 'temp', Date.now().toString());
+  try {
+    // Nettoyer les anciennes vidéos
+    await fs.mkdir(videosDir, { recursive: true });
+    const existingFiles = await fs.readdir(videosDir);
+    await Promise.all(existingFiles
+      .filter(f => f.endsWith('.mp4'))
+      .map(f => fs.unlink(path.join(videosDir, f)))
+    );
+
+    // Créer le dossier temporaire
     await fs.mkdir(tempDir, { recursive: true });
 
     // Télécharger les images
-    const downloadPromises = images.map(async (url, i) => {
-      const response = await axios.get(url, { responseType: 'arraybuffer' });
-      const fileName = `img${String(i + 1).padStart(3, '0')}.jpg`;
+    const imagePaths = await Promise.all(images.map(async (url, index) => {
+      const fileName = `img${String(index + 1).padStart(3, '0')}.jpg`;
       const filePath = path.join(tempDir, fileName);
+      const response = await axios.get(url, { responseType: 'arraybuffer' });
       await fs.writeFile(filePath, response.data);
       return filePath;
-    });
+    }));
 
-    await Promise.all(downloadPromises);
-
-    // Télécharger l’audio s’il est fourni
+    // Télécharger l’audio
     let audioPath = null;
     if (audioUrl) {
-      const audioResponse = await axios.get(audioUrl, { responseType: 'arraybuffer' });
+      const audioData = await axios.get(audioUrl, { responseType: 'arraybuffer' });
       audioPath = path.join(tempDir, 'audio.mp3');
-      await fs.writeFile(audioPath, audioResponse.data);
+      await fs.writeFile(audioPath, audioData.data);
     }
 
+    // Créer la vidéo avec ffmpeg
     const outputFileName = `video_${Date.now()}.mp4`;
     const outputVideoPath = path.join(videosDir, outputFileName);
-    await fs.mkdir(path.dirname(outputVideoPath), { recursive: true });
 
-    // Créer la vidéo avec ffmpeg (1 image = 5 secondes)
     await new Promise((resolve, reject) => {
       let command = ffmpeg()
         .input(path.join(tempDir, 'img%03d.jpg'))
@@ -72,7 +67,7 @@ app.post('/create-video', async (req, res) => {
           '-c:v libx264',
           '-r 30',
           '-pix_fmt yuv420p',
-          ...(audioPath ? ['-shortest'] : []) // couper à la fin de l’audio si présent
+          ...(audioPath ? ['-shortest'] : [])
         ])
         .output(outputVideoPath)
         .on('end', resolve)
@@ -80,18 +75,26 @@ app.post('/create-video', async (req, res) => {
         .run();
     });
 
+    // Nettoyer les fichiers temporaires
     await fs.rm(tempDir, { recursive: true, force: true });
 
     const videoUrl = `${req.protocol}://${req.get('host')}/videos/${outputFileName}`;
     res.json({ videoUrl });
 
   } catch (error) {
-    console.error('Erreur serveur :', error);
+    console.error('Erreur lors de la génération de la vidéo :', error);
     res.status(500).json({ error: 'Erreur serveur' });
+
+    // En cas d’erreur, on tente quand même de nettoyer le dossier temporaire
+    try {
+      await fs.rm(tempDir, { recursive: true, force: true });
+    } catch (cleanupErr) {
+      console.warn('Erreur de nettoyage du dossier temporaire :', cleanupErr.message);
+    }
   }
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Serveur lancé sur le port ${PORT}`);
+  console.log(`✅ Serveur lancé sur http://localhost:${PORT}`);
 });
