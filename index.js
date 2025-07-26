@@ -108,6 +108,12 @@ app.post('/create-video', async (req, res) => {
           ...(audioPath ? ['-shortest'] : [])
         ])
         .output(outputVideoPath)
+        .on('start', (cmdLine) => {
+          console.log('▶️ ffmpeg start avec la commande :', cmdLine);
+        })
+        .on('progress', (progress) => {
+          console.log(`⏳ Progression ffmpeg : frames=${progress.frames}, temps=${progress.timemark}`);
+        })
         .on('end', () => {
           console.log('✅ Vidéo créée avec succès:', outputFileName);
           resolve();
