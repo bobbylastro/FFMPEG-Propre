@@ -28,7 +28,7 @@ app.post('/create-video', async (req, res) => {
   }
 
   const videosDir = path.join(__dirname, 'public/videos');
-  const tempDir = path.join(__dirname, 'temp', Date.now().toString());
+  const tempDir = path.join('/tmp', Date.now().toString());
 
   try {
     // Nettoyer les anciennes vidéos
