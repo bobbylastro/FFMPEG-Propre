@@ -7,25 +7,26 @@ const ffmpeg = require('fluent-ffmpeg');
 const app = express();
 app.use(express.json());
 
-// Fonction utilitaire pour obtenir la durée de l'audio
 const getAudioDuration = (audioPath) => {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(audioPath, (err, metadata) => {
-      if (err) return reject(err);
+      if (err) {
+        console.error('Erreur ffprobe:', err);
+        return reject(err);
+      }
       resolve(metadata.format.duration);
     });
   });
 };
 
-// Expose le dossier public
 app.use('/videos', express.static(path.join(__dirname, 'public/videos')));
 
 app.post('/create-video', async (req, res) => {
   console.log('➡️ Nouvelle requête reçue pour /create-video');
 
   const { images, audioUrl } = req.body;
-
   if (!Array.isArray(images) || images.length === 0) {
+    console.log('❌ Aucune image fournie dans la requête');
     return res.status(400).json({ error: 'Aucune image fournie.' });
   }
 
@@ -34,47 +35,54 @@ app.post('/create-video', async (req, res) => {
   const tempDir = path.join(tempBaseDir, Date.now().toString());
 
   try {
-    // Nettoyer les anciennes vidéos
+    console.log('📁 Création et nettoyage du dossier videos');
     await fs.mkdir(videosDir, { recursive: true });
     const existingFiles = await fs.readdir(videosDir);
     await Promise.all(existingFiles
       .filter(f => f.endsWith('.mp4'))
       .map(f => fs.unlink(path.join(videosDir, f)))
     );
+    console.log('✅ Dossier videos nettoyé');
 
-    // Nettoyer le dossier temp s'il existe déjà (sécurité)
+    console.log('🧹 Nettoyage du dossier temp (si existant)');
     await fs.rm(tempBaseDir, { recursive: true, force: true });
 
-    // Créer le nouveau dossier temporaire
+    console.log('📂 Création du dossier temporaire:', tempDir);
     await fs.mkdir(tempDir, { recursive: true });
 
-    // Télécharger les images
+    console.log(`⬇️ Téléchargement de ${images.length} images`);
     const imagePaths = await Promise.all(images.map(async (url, index) => {
       const fileName = `img${String(index + 1).padStart(3, '0')}.jpg`;
       const filePath = path.join(tempDir, fileName);
+      console.log(`➡️ Téléchargement de l'image ${index + 1}: ${url}`);
       const response = await axios.get(url, { responseType: 'arraybuffer' });
       await fs.writeFile(filePath, response.data);
+      console.log(`✅ Image sauvegardée: ${fileName}`);
       return filePath;
     }));
 
-    // Télécharger l’audio
     let audioPath = null;
     let secondsPerImage = 8;
 
     if (audioUrl) {
+      console.log('⬇️ Téléchargement de l’audio:', audioUrl);
       const audioData = await axios.get(audioUrl, { responseType: 'arraybuffer' });
       audioPath = path.join(tempDir, 'audio.mp3');
       await fs.writeFile(audioPath, audioData.data);
+      console.log('✅ Audio sauvegardé');
 
+      console.log('⏱️ Extraction de la durée audio');
       const audioDuration = await getAudioDuration(audioPath);
+      console.log(`⏲️ Durée audio détectée: ${audioDuration}s`);
       secondsPerImage = audioDuration / images.length;
       secondsPerImage = Math.max(1, Math.min(secondsPerImage, 20));
+      console.log(`⏳ Durée par image calculée: ${secondsPerImage}s`);
     }
 
-    // Créer la vidéo
     const outputFileName = `video_${Date.now()}.mp4`;
     const outputVideoPath = path.join(videosDir, outputFileName);
 
+    console.log('🎬 Lancement de la création vidéo avec ffmpeg');
     await new Promise((resolve, reject) => {
       let command = ffmpeg()
         .input(path.join(tempDir, 'img%03d.jpg'))
@@ -92,15 +100,23 @@ app.post('/create-video', async (req, res) => {
           ...(audioPath ? ['-shortest'] : [])
         ])
         .output(outputVideoPath)
-        .on('end', resolve)
-        .on('error', reject)
+        .on('end', () => {
+          console.log('✅ Vidéo créée avec succès:', outputFileName);
+          resolve();
+        })
+        .on('error', (err) => {
+          console.error('❌ Erreur ffmpeg:', err);
+          reject(err);
+        })
         .run();
     });
 
-    // Nettoyer les fichiers temporaires
+    console.log('🧹 Nettoyage des fichiers temporaires');
     await fs.rm(tempDir, { recursive: true, force: true });
+    console.log('✅ Nettoyage temporaire terminé');
 
     const videoUrl = `${req.protocol}://${req.get('host')}/videos/${outputFileName}`;
+    console.log('📤 Envoi de la réponse avec URL vidéo');
     res.json({ videoUrl });
 
   } catch (error) {
@@ -108,7 +124,9 @@ app.post('/create-video', async (req, res) => {
     res.status(500).json({ error: 'Erreur serveur' });
 
     try {
+      console.log('🧹 Tentative de nettoyage du dossier temporaire après erreur');
       await fs.rm(tempDir, { recursive: true, force: true });
+      console.log('✅ Nettoyage temporaire après erreur terminé');
     } catch (cleanupErr) {
       console.warn('⚠️ Erreur de nettoyage du dossier temporaire :', cleanupErr.message);
     }
