@@ -21,6 +21,8 @@ const getAudioDuration = (audioPath) => {
 app.use('/videos', express.static(path.join(__dirname, 'public/videos')));
 
 app.post('/create-video', async (req, res) => {
+  console.log('➡️ Nouvelle requête reçue pour /create-video');
+
   const { images, audioUrl } = req.body;
 
   if (!Array.isArray(images) || images.length === 0) {
@@ -28,7 +30,8 @@ app.post('/create-video', async (req, res) => {
   }
 
   const videosDir = path.join(__dirname, 'public/videos');
-  const tempDir = path.join(__dirname, 'temp', Date.now().toString());
+  const tempBaseDir = path.join(__dirname, 'temp');
+  const tempDir = path.join(tempBaseDir, Date.now().toString());
 
   try {
     // Nettoyer les anciennes vidéos
@@ -39,7 +42,10 @@ app.post('/create-video', async (req, res) => {
       .map(f => fs.unlink(path.join(videosDir, f)))
     );
 
-    // Créer le dossier temporaire
+    // Nettoyer le dossier temp s'il existe déjà (sécurité)
+    await fs.rm(tempBaseDir, { recursive: true, force: true });
+
+    // Créer le nouveau dossier temporaire
     await fs.mkdir(tempDir, { recursive: true });
 
     // Télécharger les images
@@ -53,22 +59,19 @@ app.post('/create-video', async (req, res) => {
 
     // Télécharger l’audio
     let audioPath = null;
-    let secondsPerImage = 8; // Valeur par défaut
+    let secondsPerImage = 8;
 
     if (audioUrl) {
       const audioData = await axios.get(audioUrl, { responseType: 'arraybuffer' });
       audioPath = path.join(tempDir, 'audio.mp3');
       await fs.writeFile(audioPath, audioData.data);
 
-      // Récupérer la durée de l’audio et calculer la durée par image
       const audioDuration = await getAudioDuration(audioPath);
       secondsPerImage = audioDuration / images.length;
-
-      // Optionnel : limite raisonnable
       secondsPerImage = Math.max(1, Math.min(secondsPerImage, 20));
     }
 
-    // Créer la vidéo avec ffmpeg
+    // Créer la vidéo
     const outputFileName = `video_${Date.now()}.mp4`;
     const outputVideoPath = path.join(videosDir, outputFileName);
 
@@ -101,14 +104,13 @@ app.post('/create-video', async (req, res) => {
     res.json({ videoUrl });
 
   } catch (error) {
-    console.error('Erreur lors de la génération de la vidéo :', error);
+    console.error('❌ Erreur lors de la génération de la vidéo :', error);
     res.status(500).json({ error: 'Erreur serveur' });
 
-    // En cas d’erreur, on tente quand même de nettoyer le dossier temporaire
     try {
       await fs.rm(tempDir, { recursive: true, force: true });
     } catch (cleanupErr) {
-      console.warn('Erreur de nettoyage du dossier temporaire :', cleanupErr.message);
+      console.warn('⚠️ Erreur de nettoyage du dossier temporaire :', cleanupErr.message);
     }
   }
 });
