@@ -7,6 +7,16 @@ const ffmpeg = require('fluent-ffmpeg');
 const app = express();
 app.use(express.json());
 
+// Fonction utilitaire pour obtenir la durée de l'audio
+const getAudioDuration = (audioPath) => {
+  return new Promise((resolve, reject) => {
+    ffmpeg.ffprobe(audioPath, (err, metadata) => {
+      if (err) return reject(err);
+      resolve(metadata.format.duration);
+    });
+  });
+};
+
 // Expose le dossier public
 app.use('/videos', express.static(path.join(__dirname, 'public/videos')));
 
@@ -43,10 +53,19 @@ app.post('/create-video', async (req, res) => {
 
     // Télécharger l’audio
     let audioPath = null;
+    let secondsPerImage = 8; // Valeur par défaut
+
     if (audioUrl) {
       const audioData = await axios.get(audioUrl, { responseType: 'arraybuffer' });
       audioPath = path.join(tempDir, 'audio.mp3');
       await fs.writeFile(audioPath, audioData.data);
+
+      // Récupérer la durée de l’audio et calculer la durée par image
+      const audioDuration = await getAudioDuration(audioPath);
+      secondsPerImage = audioDuration / images.length;
+
+      // Optionnel : limite raisonnable
+      secondsPerImage = Math.max(1, Math.min(secondsPerImage, 20));
     }
 
     // Créer la vidéo avec ffmpeg
@@ -56,7 +75,7 @@ app.post('/create-video', async (req, res) => {
     await new Promise((resolve, reject) => {
       let command = ffmpeg()
         .input(path.join(tempDir, 'img%03d.jpg'))
-        .inputOptions(['-framerate 1/8']);
+        .inputOptions([`-framerate 1/${secondsPerImage}`]);
 
       if (audioPath) {
         command = command.input(audioPath);
