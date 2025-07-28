@@ -42,30 +42,43 @@ app.post('/create-video', async (req, res) => {
     // Créer le dossier temporaire
     await fs.mkdir(tempDir, { recursive: true });
 
-    // Télécharger les images
-    const imagePaths = await Promise.all(images.map(async (url, index) => {
-      const fileName = `img${String(index + 1).padStart(3, '0')}.jpg`;
+    // Télécharger les images séquentiellement
+    const imagePaths = [];
+    for (let i = 0; i < images.length; i++) {
+      const url = images[i];
+      const fileName = `img${String(i + 1).padStart(3, '0')}.jpg`;
       const filePath = path.join(tempDir, fileName);
-      const response = await axios.get(url, { responseType: 'arraybuffer' });
-      await fs.writeFile(filePath, response.data);
-      return filePath;
-    }));
+
+      try {
+        const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
+        await fs.writeFile(filePath, response.data);
+        imagePaths.push(filePath);
+      } catch (err) {
+        console.error(`Erreur téléchargement de l'image ${url}:`, err.message);
+        return res.status(500).json({ error: `Erreur téléchargement de l'image ${url}` });
+      }
+    }
 
     // Télécharger l’audio
     let audioPath = null;
     let secondsPerImage = 8; // Valeur par défaut
 
     if (audioUrl) {
-      const audioData = await axios.get(audioUrl, { responseType: 'arraybuffer' });
-      audioPath = path.join(tempDir, 'audio.mp3');
-      await fs.writeFile(audioPath, audioData.data);
+      try {
+        const audioData = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: 15000 });
+        audioPath = path.join(tempDir, 'audio.mp3');
+        await fs.writeFile(audioPath, audioData.data);
 
-      // Récupérer la durée de l’audio et calculer la durée par image
-      const audioDuration = await getAudioDuration(audioPath);
-      secondsPerImage = audioDuration / images.length;
+        // Récupérer la durée de l’audio et calculer la durée par image
+        const audioDuration = await getAudioDuration(audioPath);
+        secondsPerImage = audioDuration / images.length;
 
-      // Optionnel : limite raisonnable
-      secondsPerImage = Math.max(1, Math.min(secondsPerImage, 20));
+        // Optionnel : limite raisonnable
+        secondsPerImage = Math.max(1, Math.min(secondsPerImage, 20));
+      } catch (err) {
+        console.error(`Erreur téléchargement de l'audio ${audioUrl}:`, err.message);
+        return res.status(500).json({ error: `Erreur téléchargement de l'audio ${audioUrl}` });
+      }
     }
 
     // Créer la vidéo avec ffmpeg
