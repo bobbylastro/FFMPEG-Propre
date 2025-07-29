@@ -101,9 +101,10 @@ app.post('/create-video', async (req, res) => {
       }
 
       command
+        .videoFilters('scale=720:1280')
         .outputOptions([
-          '-preset ultrafast',       // Réduction consommation CPU
-          '-r 15',                   // Framerate réduit
+          '-preset ultrafast',
+          '-r 15',
           '-vf scale=720:1280',      // Resize images
           '-b:v 500k',               // Débit vidéo réduit
           '-c:v libx264',
