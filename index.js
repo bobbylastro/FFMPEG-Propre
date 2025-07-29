@@ -21,69 +21,77 @@ const getAudioDuration = (audioPath) => {
 app.use('/videos', express.static(path.join(__dirname, 'public/videos')));
 
 app.post('/create-video', async (req, res) => {
+  console.log('📥 Requête reçue /create-video');
   const { images, audioUrl } = req.body;
 
   if (!Array.isArray(images) || images.length === 0) {
+    console.warn('⚠️ Aucune image fournie');
     return res.status(400).json({ error: 'Aucune image fournie.' });
   }
 
   const videosDir = path.join(__dirname, 'public/videos');
   const tempDir = path.join(__dirname, 'temp', Date.now().toString());
+  console.log(`📂 Dossier temporaire : ${tempDir}`);
 
   try {
-    // Nettoyer les anciennes vidéos
+    console.log('🧹 Nettoyage des anciennes vidéos...');
     await fs.mkdir(videosDir, { recursive: true });
     const existingFiles = await fs.readdir(videosDir);
     await Promise.all(existingFiles
       .filter(f => f.endsWith('.mp4'))
       .map(f => fs.unlink(path.join(videosDir, f)))
     );
+    console.log('✅ Nettoyage terminé.');
 
     // Créer le dossier temporaire
     await fs.mkdir(tempDir, { recursive: true });
 
-    // Télécharger les images séquentiellement
+    // Télécharger les images
+    console.log('⬇️ Téléchargement des images...');
     const imagePaths = [];
     for (let i = 0; i < images.length; i++) {
       const url = images[i];
       const fileName = `img${String(i + 1).padStart(3, '0')}.jpg`;
       const filePath = path.join(tempDir, fileName);
 
+      console.log(`📸 Téléchargement image ${i + 1}: ${url}`);
       try {
         const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
         await fs.writeFile(filePath, response.data);
         imagePaths.push(filePath);
       } catch (err) {
-        console.error(`Erreur téléchargement de l'image ${url}:`, err.message);
+        console.error(`❌ Erreur téléchargement image ${url}:`, err.message);
         return res.status(500).json({ error: `Erreur téléchargement de l'image ${url}` });
       }
     }
+    console.log('✅ Toutes les images ont été téléchargées.');
 
     // Télécharger l’audio
     let audioPath = null;
-    let secondsPerImage = 8; // Valeur par défaut
+    let secondsPerImage = 8;
 
     if (audioUrl) {
+      console.log(`🎵 Téléchargement de l'audio: ${audioUrl}`);
       try {
         const audioData = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: 15000 });
         audioPath = path.join(tempDir, 'audio.mp3');
         await fs.writeFile(audioPath, audioData.data);
 
-        // Récupérer la durée de l’audio et calculer la durée par image
         const audioDuration = await getAudioDuration(audioPath);
         secondsPerImage = audioDuration / images.length;
-
-        // Optionnel : limite raisonnable
         secondsPerImage = Math.max(1, Math.min(secondsPerImage, 20));
+
+        console.log(`✅ Audio téléchargé. Durée: ${audioDuration.toFixed(2)}s, Durée/image: ${secondsPerImage.toFixed(2)}s`);
       } catch (err) {
-        console.error(`Erreur téléchargement de l'audio ${audioUrl}:`, err.message);
+        console.error(`❌ Erreur téléchargement audio ${audioUrl}:`, err.message);
         return res.status(500).json({ error: `Erreur téléchargement de l'audio ${audioUrl}` });
       }
     }
 
-    // Créer la vidéo avec ffmpeg
+    // Créer la vidéo
     const outputFileName = `video_${Date.now()}.mp4`;
     const outputVideoPath = path.join(videosDir, outputFileName);
+    console.log(`🎬 Démarrage création de la vidéo : ${outputVideoPath}`);
 
     await new Promise((resolve, reject) => {
       let command = ffmpeg()
@@ -102,26 +110,36 @@ app.post('/create-video', async (req, res) => {
           ...(audioPath ? ['-shortest'] : [])
         ])
         .output(outputVideoPath)
-        .on('end', resolve)
-        .on('error', reject)
+        .on('start', cmd => console.log('🛠️ FFmpeg command :', cmd))
+        .on('end', () => {
+          console.log('✅ Vidéo générée avec succès.');
+          resolve();
+        })
+        .on('error', err => {
+          console.error('❌ Erreur FFmpeg :', err.message);
+          reject(err);
+        })
         .run();
     });
 
     // Nettoyer les fichiers temporaires
+    console.log('🧹 Nettoyage du dossier temporaire...');
     await fs.rm(tempDir, { recursive: true, force: true });
+    console.log('✅ Dossier temporaire supprimé.');
 
     const videoUrl = `${req.protocol}://${req.get('host')}/videos/${outputFileName}`;
+    console.log('🎉 Vidéo disponible à :', videoUrl);
     res.json({ videoUrl });
 
   } catch (error) {
-    console.error('Erreur lors de la génération de la vidéo :', error);
+    console.error('🔥 Erreur générale :', error.stack || error.message);
     res.status(500).json({ error: 'Erreur serveur' });
 
-    // En cas d’erreur, on tente quand même de nettoyer le dossier temporaire
     try {
       await fs.rm(tempDir, { recursive: true, force: true });
+      console.log('🧼 Nettoyage du dossier temporaire après échec.');
     } catch (cleanupErr) {
-      console.warn('Erreur de nettoyage du dossier temporaire :', cleanupErr.message);
+      console.warn('⚠️ Échec du nettoyage du dossier temporaire :', cleanupErr.message);
     }
   }
 });
