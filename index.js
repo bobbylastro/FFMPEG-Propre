@@ -7,7 +7,7 @@ const ffmpeg = require('fluent-ffmpeg');
 const app = express();
 app.use(express.json());
 
-// Fonction utilitaire pour obtenir la durée de l'audio
+// Fonction utilitaire pour obtenir la durée de l’audio
 const getAudioDuration = (audioPath) => {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(audioPath, (err, metadata) => {
@@ -43,7 +43,6 @@ app.post('/create-video', async (req, res) => {
     );
     console.log('✅ Nettoyage terminé.');
 
-    // Créer le dossier temporaire
     await fs.mkdir(tempDir, { recursive: true });
 
     // Télécharger les images
@@ -68,7 +67,7 @@ app.post('/create-video', async (req, res) => {
 
     // Télécharger l’audio
     let audioPath = null;
-    let secondsPerImage = 8;
+    let secondsPerImage = 6;
 
     if (audioUrl) {
       console.log(`🎵 Téléchargement de l'audio: ${audioUrl}`);
@@ -80,7 +79,6 @@ app.post('/create-video', async (req, res) => {
         const audioDuration = await getAudioDuration(audioPath);
         secondsPerImage = audioDuration / images.length;
         secondsPerImage = Math.max(1, Math.min(secondsPerImage, 20));
-
         console.log(`✅ Audio téléchargé. Durée: ${audioDuration.toFixed(2)}s, Durée/image: ${secondsPerImage.toFixed(2)}s`);
       } catch (err) {
         console.error(`❌ Erreur téléchargement audio ${audioUrl}:`, err.message);
@@ -88,7 +86,7 @@ app.post('/create-video', async (req, res) => {
       }
     }
 
-    // Créer la vidéo
+    // Création de la vidéo
     const outputFileName = `video_${Date.now()}.mp4`;
     const outputVideoPath = path.join(videosDir, outputFileName);
     console.log(`🎬 Démarrage création de la vidéo : ${outputVideoPath}`);
@@ -104,13 +102,17 @@ app.post('/create-video', async (req, res) => {
 
       command
         .outputOptions([
+          '-preset ultrafast',       // Réduction consommation CPU
+          '-r 15',                   // Framerate réduit
+          '-vf scale=720:1280',      // Resize images
+          '-b:v 500k',               // Débit vidéo réduit
           '-c:v libx264',
-          '-r 30',
           '-pix_fmt yuv420p',
           ...(audioPath ? ['-shortest'] : [])
         ])
         .output(outputVideoPath)
         .on('start', cmd => console.log('🛠️ FFmpeg command :', cmd))
+        .on('stderr', line => console.log('📣 FFmpeg stderr:', line))
         .on('end', () => {
           console.log('✅ Vidéo générée avec succès.');
           resolve();
@@ -122,7 +124,7 @@ app.post('/create-video', async (req, res) => {
         .run();
     });
 
-    // Nettoyer les fichiers temporaires
+    // Nettoyage
     console.log('🧹 Nettoyage du dossier temporaire...');
     await fs.rm(tempDir, { recursive: true, force: true });
     console.log('✅ Dossier temporaire supprimé.');
