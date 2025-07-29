@@ -101,7 +101,7 @@ app.post('/create-video', async (req, res) => {
       }
 
       command
-          .videoFilters('scale=w=if(gt(a,9/16),720,-2):h=if(gt(a,9/16),-2,1280),crop=720:1280')
+          .videoFilters("scale=iw*max(720/iw\\,1280/ih):ih*max(720/iw\\,1280/ih),crop=720:1280")
           .outputOptions([
             '-preset ultrafast',
             '-r 15',
