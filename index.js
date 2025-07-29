@@ -101,15 +101,15 @@ app.post('/create-video', async (req, res) => {
       }
 
       command
-        .outputOptions([
-          '-preset ultrafast',
-          '-r 15',
-          'scale=w=if(gt(a,9/16),720,-2):h=if(gt(a,9/16),-2:1280),crop=720:1280',     // Resize images
-          '-b:v 500k',               // Débit vidéo réduit
-          '-c:v libx264',
-          '-pix_fmt yuv420p',
-          ...(audioPath ? ['-shortest'] : [])
-        ])
+          .videoFilters('scale=w=if(gt(a,9/16),720,-2):h=if(gt(a,9/16),-2,1280),crop=720:1280')
+          .outputOptions([
+            '-preset ultrafast',
+            '-r 15',
+            '-b:v 500k',
+            '-c:v libx264',
+            '-pix_fmt yuv420p',
+            ...(audioPath ? ['-shortest'] : [])
+          ])
         .output(outputVideoPath)
         .on('start', cmd => console.log('🛠️ FFmpeg command :', cmd))
         .on('stderr', line => console.log('📣 FFmpeg stderr:', line))
