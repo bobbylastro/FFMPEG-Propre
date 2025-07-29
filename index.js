@@ -104,7 +104,7 @@ app.post('/create-video', async (req, res) => {
         .outputOptions([
           '-preset ultrafast',
           '-r 15',
-          '-vf scale=\'if(gt(a,9/16),720,-1)\':\'if(gt(a,9/16),-1,1280)\',crop=720:1280',     // Resize images
+          'scale=w=if(gt(a,9/16),720,-2):h=if(gt(a,9/16),-2:1280),crop=720:1280',     // Resize images
           '-b:v 500k',               // Débit vidéo réduit
           '-c:v libx264',
           '-pix_fmt yuv420p',
