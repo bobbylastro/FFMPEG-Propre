@@ -31,7 +31,7 @@ app.post('/create-video', async (req, res) => {
 
   const videosDir = path.join(__dirname, 'public/videos');
   const tempDir = path.join(__dirname, 'temp', Date.now().toString());
-  console.log(📂 Dossier temporaire : ${tempDir});
+  console.log('📂 Dossier temporaire : ${tempDir}');
 
   try {
     console.log('🧹 Nettoyage des anciennes vidéos...');
@@ -148,5 +148,5 @@ app.post('/create-video', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(✅ Serveur lancé sur http://localhost:${PORT});
+  console.log('✅ Serveur lancé sur http://localhost:${PORT}');
 });
