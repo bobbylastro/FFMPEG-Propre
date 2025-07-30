@@ -31,7 +31,7 @@ app.post('/create-video', async (req, res) => {
 
   const videosDir = path.join(__dirname, 'public/videos');
   const tempDir = path.join(__dirname, 'temp', Date.now().toString());
-  console.log(`📂 Dossier temporaire : ${tempDir}`);
+  console.log(📂 Dossier temporaire : ${tempDir});
 
   try {
     console.log('🧹 Nettoyage des anciennes vidéos...');
@@ -50,17 +50,17 @@ app.post('/create-video', async (req, res) => {
     const imagePaths = [];
     for (let i = 0; i < images.length; i++) {
       const url = images[i];
-      const fileName = `img${String(i + 1).padStart(3, '0')}.jpg`;
+      const fileName = img${String(i + 1).padStart(3, '0')}.jpg;
       const filePath = path.join(tempDir, fileName);
 
-      console.log(`📸 Téléchargement image ${i + 1}: ${url}`);
+      console.log(📸 Téléchargement image ${i + 1}: ${url});
       try {
         const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
         await fs.writeFile(filePath, response.data);
         imagePaths.push(filePath);
       } catch (err) {
-        console.error(`❌ Erreur téléchargement image ${url}:`, err.message);
-        return res.status(500).json({ error: `Erreur téléchargement de l'image ${url}` });
+        console.error(❌ Erreur téléchargement image ${url}:, err.message);
+        return res.status(500).json({ error: Erreur téléchargement de l'image ${url} });
       }
     }
     console.log('✅ Toutes les images ont été téléchargées.');
@@ -70,7 +70,7 @@ app.post('/create-video', async (req, res) => {
     let secondsPerImage = 6;
 
     if (audioUrl) {
-      console.log(`🎵 Téléchargement de l'audio: ${audioUrl}`);
+      console.log(🎵 Téléchargement de l'audio: ${audioUrl});
       try {
         const audioData = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: 15000 });
         audioPath = path.join(tempDir, 'audio.mp3');
@@ -79,33 +79,29 @@ app.post('/create-video', async (req, res) => {
         const audioDuration = await getAudioDuration(audioPath);
         secondsPerImage = audioDuration / images.length;
         secondsPerImage = Math.max(1, Math.min(secondsPerImage, 20));
-        console.log(`✅ Audio téléchargé. Durée: ${audioDuration.toFixed(2)}s, Durée/image: ${secondsPerImage.toFixed(2)}s`);
+        console.log(✅ Audio téléchargé. Durée: ${audioDuration.toFixed(2)}s, Durée/image: ${secondsPerImage.toFixed(2)}s);
       } catch (err) {
-        console.error(`❌ Erreur téléchargement audio ${audioUrl}:`, err.message);
-        return res.status(500).json({ error: `Erreur téléchargement de l'audio ${audioUrl}` });
+        console.error(❌ Erreur téléchargement audio ${audioUrl}:, err.message);
+        return res.status(500).json({ error: Erreur téléchargement de l'audio ${audioUrl} });
       }
     }
 
     // Création de la vidéo
-    const outputFileName = `video_${Date.now()}.mp4`;
+    const outputFileName = video_${Date.now()}.mp4;
     const outputVideoPath = path.join(videosDir, outputFileName);
-    console.log(`🎬 Démarrage création de la vidéo : ${outputVideoPath}`);
+    console.log(🎬 Démarrage création de la vidéo : ${outputVideoPath});
 
     await new Promise((resolve, reject) => {
       let command = ffmpeg()
         .input(path.join(tempDir, 'img%03d.jpg'))
-        .inputOptions([`-framerate 1/${secondsPerImage}`]);
+        .inputOptions([-framerate 1/${secondsPerImage}]);
 
       if (audioPath) {
         command = command.input(audioPath);
       }
 
       command
-          .videoFilters([
-  "zoompan=z='zoom+0.001':d=125",
-  "scale=720:1280",
-  "crop=720:1280"
-].join(','))
+          .videoFilters("scale=iw*max(720/iw\\,1280/ih):ih*max(720/iw\\,1280/ih),crop=720:1280")
           .outputOptions([
             '-preset ultrafast',
             '-r 15',
@@ -133,7 +129,7 @@ app.post('/create-video', async (req, res) => {
     await fs.rm(tempDir, { recursive: true, force: true });
     console.log('✅ Dossier temporaire supprimé.');
 
-    const videoUrl = `${req.protocol}://${req.get('host')}/videos/${outputFileName}`;
+    const videoUrl = ${req.protocol}://${req.get('host')}/videos/${outputFileName};
     console.log('🎉 Vidéo disponible à :', videoUrl);
     res.json({ videoUrl });
 
@@ -152,5 +148,5 @@ app.post('/create-video', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Serveur lancé sur http://localhost:${PORT}`);
+  console.log(✅ Serveur lancé sur http://localhost:${PORT});
 });
