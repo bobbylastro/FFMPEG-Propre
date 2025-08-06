@@ -3,11 +3,11 @@ const axios = require('axios');
 const fs = require('fs/promises');
 const path = require('path');
 const ffmpeg = require('fluent-ffmpeg');
-const { exec } = require('child_process');
 
 const app = express();
 app.use(express.json());
 
+// Fonction utilitaire pour obtenir la durée de l’audio
 const getAudioDuration = (audioPath) => {
   return new Promise((resolve, reject) => {
     ffmpeg.ffprobe(audioPath, (err, metadata) => {
@@ -17,6 +17,7 @@ const getAudioDuration = (audioPath) => {
   });
 };
 
+// Expose le dossier public
 app.use('/videos', express.static(path.join(__dirname, 'public/videos')));
 
 app.post('/create-video', async (req, res) => {
@@ -30,7 +31,7 @@ app.post('/create-video', async (req, res) => {
 
   const videosDir = path.join(__dirname, 'public/videos');
   const tempDir = path.join(__dirname, 'temp', Date.now().toString());
-  console.log(`📂 Dossier temporaire : ${tempDir}`);
+  console.log(📂 Dossier temporaire : ${tempDir});
 
   try {
     console.log('🧹 Nettoyage des anciennes vidéos...');
@@ -44,30 +45,32 @@ app.post('/create-video', async (req, res) => {
 
     await fs.mkdir(tempDir, { recursive: true });
 
+    // Télécharger les images
     console.log('⬇️ Téléchargement des images...');
     const imagePaths = [];
     for (let i = 0; i < images.length; i++) {
       const url = images[i];
-      const fileName = `img${String(i + 1).padStart(3, '0')}.jpg`;
+      const fileName = img${String(i + 1).padStart(3, '0')}.jpg;
       const filePath = path.join(tempDir, fileName);
 
-      console.log(`📸 Téléchargement image ${i + 1}: ${url}`);
+      console.log(📸 Téléchargement image ${i + 1}: ${url});
       try {
         const response = await axios.get(url, { responseType: 'arraybuffer', timeout: 15000 });
         await fs.writeFile(filePath, response.data);
         imagePaths.push(filePath);
       } catch (err) {
-        console.error(`❌ Erreur téléchargement image ${url}:`, err.message);
-        return res.status(500).json({ error: `Erreur téléchargement de l'image ${url}` });
+        console.error(❌ Erreur téléchargement image ${url}:, err.message);
+        return res.status(500).json({ error: Erreur téléchargement de l'image ${url} });
       }
     }
     console.log('✅ Toutes les images ont été téléchargées.');
 
+    // Télécharger l’audio
     let audioPath = null;
     let secondsPerImage = 6;
 
     if (audioUrl) {
-      console.log(`🎵 Téléchargement de l'audio: ${audioUrl}`);
+      console.log(🎵 Téléchargement de l'audio: ${audioUrl});
       try {
         const audioData = await axios.get(audioUrl, { responseType: 'arraybuffer', timeout: 15000 });
         audioPath = path.join(tempDir, 'audio.mp3');
@@ -76,61 +79,57 @@ app.post('/create-video', async (req, res) => {
         const audioDuration = await getAudioDuration(audioPath);
         secondsPerImage = audioDuration / images.length;
         secondsPerImage = Math.max(1, Math.min(secondsPerImage, 20));
-        console.log(`✅ Audio téléchargé. Durée: ${audioDuration.toFixed(2)}s, Durée/image: ${secondsPerImage.toFixed(2)}s`);
+        console.log(✅ Audio téléchargé. Durée: ${audioDuration.toFixed(2)}s, Durée/image: ${secondsPerImage.toFixed(2)}s);
       } catch (err) {
-        console.error(`❌ Erreur téléchargement audio ${audioUrl}:`, err.message);
-        return res.status(500).json({ error: `Erreur téléchargement de l'audio ${audioUrl}` });
+        console.error(❌ Erreur téléchargement audio ${audioUrl}:, err.message);
+        return res.status(500).json({ error: Erreur téléchargement de l'audio ${audioUrl} });
       }
     }
 
-    console.log('🎞️ Génération des vidéos avec effet Ken Burns...');
-    const kenBurnsVideos = [];
-
-    for (let i = 0; i < imagePaths.length; i++) {
-      const inputImage = imagePaths[i];
-      const outputSegment = path.join(tempDir, `segment${i}.mp4`);
-      kenBurnsVideos.push(outputSegment);
-
-      const ffmpegCmd = `ffmpeg -y -loop 1 -t ${secondsPerImage} -i "${inputImage}" -filter_complex "[0:v]scale=2160:3840,zoompan=z='if(lte(zoom,1.0),1.0,zoom+0.0005)':x='(iw-(iw/zoom))/2':y='(ih-(ih/zoom))/2':d=125,fps=25" -s 1080x1920 -c:v libx264 -pix_fmt yuv420p "${outputSegment}"`;
-      
-      await new Promise((resolve, reject) => {
-        exec(ffmpegCmd, (error, stdout, stderr) => {
-          if (error) {
-            console.error(`❌ Erreur FFmpeg pour ${inputImage}:`, error.message);
-            reject(error);
-          } else {
-            console.log(`✅ Segment généré : ${outputSegment}`);
-            resolve();
-          }
-        });
-      });
-    }
-
-    const concatListPath = path.join(tempDir, 'concat.txt');
-    await fs.writeFile(concatListPath, kenBurnsVideos.map(p => `file '${p}'`).join('\\n'));
-
-    const outputFileName = `video_${Date.now()}.mp4`;
+    // Création de la vidéo
+    const outputFileName = video_${Date.now()}.mp4;
     const outputVideoPath = path.join(videosDir, outputFileName);
-
-    const concatCmd = `ffmpeg -y -f concat -safe 0 -i "${concatListPath}" ${audioPath ? `-i "${audioPath}" -shortest` : ''} -c:v libx264 -pix_fmt yuv420p -preset ultrafast -r 25 "${outputVideoPath}"`;
+    console.log(🎬 Démarrage création de la vidéo : ${outputVideoPath});
 
     await new Promise((resolve, reject) => {
-      exec(concatCmd, (error, stdout, stderr) => {
-        if (error) {
-          console.error('❌ Erreur concaténation FFmpeg :', error.message);
-          reject(error);
-        } else {
-          console.log('✅ Vidéo finale générée');
+      let command = ffmpeg()
+        .input(path.join(tempDir, 'img%03d.jpg'))
+        .inputOptions([-framerate 1/${secondsPerImage}]);
+
+      if (audioPath) {
+        command = command.input(audioPath);
+      }
+
+      command
+          .videoFilters("zoompan=z='zoom+0.001':x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)':d=125:s=720x1280,scale=720:1280,setsar=1:1")
+          .outputOptions([
+            '-preset ultrafast',
+            '-r 15',
+            '-b:v 500k',
+            '-c:v libx264',
+            '-pix_fmt yuv420p',
+            ...(audioPath ? ['-shortest'] : [])
+          ])
+        .output(outputVideoPath)
+        .on('start', cmd => console.log('🛠️ FFmpeg command :', cmd))
+        .on('stderr', line => console.log('📣 FFmpeg stderr:', line))
+        .on('end', () => {
+          console.log('✅ Vidéo générée avec succès.');
           resolve();
-        }
-      });
+        })
+        .on('error', err => {
+          console.error('❌ Erreur FFmpeg :', err.message);
+          reject(err);
+        })
+        .run();
     });
 
+    // Nettoyage
     console.log('🧹 Nettoyage du dossier temporaire...');
     await fs.rm(tempDir, { recursive: true, force: true });
     console.log('✅ Dossier temporaire supprimé.');
 
-    const videoUrl = `${req.protocol}://${req.get('host')}/videos/${outputFileName}`;
+    const videoUrl = ${req.protocol}://${req.get('host')}/videos/${outputFileName};
     console.log('🎉 Vidéo disponible à :', videoUrl);
     res.json({ videoUrl });
 
@@ -149,5 +148,5 @@ app.post('/create-video', async (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`✅ Serveur lancé sur http://localhost:${PORT}`);
+  console.log(✅ Serveur lancé sur http://localhost:${PORT});
 });
