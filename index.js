@@ -101,7 +101,7 @@ app.post('/create-video', async (req, res) => {
       }
 
       command
-          .videoFilters("scale=iw*max(720/iw\\,1280/ih):ih*max(720/iw\\,1280/ih),crop=720:1280,zoompan=z='min(zoom+0.0005,1.05)':d=${Math.floor(secondsPerImage*15)}:x='iw/2-(iw/zoom/2)':y='ih/2-(ih/zoom/2)")
+          .videoFilters("scale=iw*max(720/iw\\,1280/ih):ih*max(720/iw\\,1280/ih),crop=720:1280")
           .outputOptions([
             '-preset ultrafast',
             '-r 15',
